@@ -48,6 +48,7 @@ dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
+slice_size = 100
 # model
 n_layer = 12
 n_head = 12
