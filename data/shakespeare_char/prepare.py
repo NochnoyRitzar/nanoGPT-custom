@@ -30,7 +30,7 @@ def decode(l):
 # get all unique characters from the smallest dataset slice
 chars = sorted(list(set(data[:int(len(data) * 0.1)])))
 
-for slice_size in np.arange(0.9, 0, -0.1):
+for slice_size in np.arange(1, 0, -0.1):
     temp_data = data[:int(len(data) * slice_size)]
     temp_dataset_len = len(temp_data)
     print(f"length of dataset in characters: {temp_dataset_len}")
