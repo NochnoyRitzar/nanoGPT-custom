@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from torcheval.metrics.functional.text import perplexity
 
 from model import GPTConfig, GPT
 
@@ -212,16 +213,22 @@ if ddp:
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
-    out = {}
+    out = {
+        'loss': {},
+        'perplexity': {}
+    }
     model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
+        perplexities = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
+            perplexities[k] = perplexity(logits, Y)
+        out['loss'][split] = losses.mean()
+        out['perplexity'][split] = perplexities.mean()
     model.train()
     return out
 
@@ -261,7 +268,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        out = estimate_loss()
+        losses, perplexities = out['loss'], out['perplexity']
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
             wandb.log({
@@ -270,6 +278,8 @@ while True:
                 "val/loss": losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
+                "train/perplexity": perplexities['train'],
+                "val/perplexity": perplexities['val'],
             })
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
@@ -324,7 +334,8 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, "
+              f"perplexity {perplexity(logits, Y)}")
     iter_num += 1
     local_iter_num += 1
 
