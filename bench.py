@@ -9,14 +9,14 @@ import torch
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-batch_size = 12
+batch_size = 2
 block_size = 1024
 bias = False
 real_data = True
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = False # use PyTorch 2.0 to compile the model to be faster
 profile = False # use pytorch profiler, or just simple benchmarking?
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # data loading init
 if real_data:
-    dataset = 'openwebtext'
+    dataset = 'wikipedia'
     data_dir = os.path.join('data', dataset)
     train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
     def get_batch(split):
@@ -50,7 +50,7 @@ else:
 # model init
 gptconf = GPTConfig(
     block_size = block_size, # how far back does the model look? i.e. context size
-    n_layer = 12, n_head = 12, n_embd = 768, # size of the model
+    n_layer = 3, n_head = 4, n_embd = 384, # size of the model
     dropout = 0, # for determinism
     bias = bias,
 )
@@ -82,7 +82,9 @@ if profile:
 
         X, Y = get_batch('train')
         for k in range(num_steps):
-            with ctx:
+            # disable flash attention for local gpu (gtx1650)
+            with torch.cuda.amp.autocast(enabled=True, dtype=ptdtype) as autocast, \
+                    torch.backends.cuda.sdp_kernel(enable_flash=False) as disable:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
@@ -101,7 +103,9 @@ else:
         t0 = time.time()
         X, Y = get_batch('train')
         for k in range(num_steps):
-            with ctx:
+            # disable flash attention for local gpu (gtx1650)
+            with torch.cuda.amp.autocast(enabled=True, dtype=ptdtype) as autocast, \
+                    torch.backends.cuda.sdp_kernel(enable_flash=False) as disable:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
