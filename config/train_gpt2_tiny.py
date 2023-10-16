@@ -9,12 +9,12 @@ dataset = 'wikipedia'
 always_save_checkpoint = False
 
 # these make the total batch size be ~0.5M
-# 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
+# 12 batch size * 1024 block size * 5 gradaccum * 1 GPUs = 61,440
 batch_size = 12
 block_size = 1024
 gradient_accumulation_steps = 5 * 1
 
-# this makes total number of tokens be
+# this makes total number of tokens be 3B
 max_iters = 50000
 lr_decay_iters = 50000
 
